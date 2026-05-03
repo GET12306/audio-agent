@@ -1,0 +1,16 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.env
+.mypy_cache
+.DS_Store
+transcribe_result/
+audio_transcribe.py
+test_demucs.py
+
+# Virtual environments
+.venv
