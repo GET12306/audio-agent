@@ -1,5 +1,6 @@
 import os
 import json
+from pathlib import Path
 from dotenv import load_dotenv
 from langchain_deepseek import ChatDeepSeek
 from langchain_ollama import ChatOllama, OllamaEmbeddings
@@ -8,6 +9,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
 from langchain_core.runnables import RunnablePassthrough
+import yaml
 
 
 load_dotenv()
@@ -27,22 +29,38 @@ llm = ChatDeepSeek(
 # local model for embedding
 embeddings = OllamaEmbeddings(model="mxbai-embed-large:latest")
 
+PROMPT_DIR = Path(__file__).parent / "prompts"
+def load_prompt(name: str) -> dict:
+    prompt_temp = os.getenv("PROMPT_SELECT", "prompt_1")  # default to prompt_1
+    with open(PROMPT_DIR / f"{name}.yaml") as f:
+        prompts = yaml.safe_load(f)
+    if prompt_temp not in prompts:
+        print(f"Warning: prompt '{prompt_temp}' not found in {name}.yaml, falling back to 'prompt_1'")
+        prompt_temp = "prompt_1"
+    return prompts[prompt_temp]
+
 # ==========================================
 # 1. Calibration
 # ==========================================
 def calibrate_text(raw_data):
+    # calibration_prompt = ChatPromptTemplate.from_messages([
+    #     ("system", "你是一个专业的音频转录文本校对助手。你的任务是修正文本中的同音字错误、专有名词错误，并使语句通顺。\
+    #         请保持原意，不要进行扩写。由于转录模型的能力有限，转录结果可能会出现无意义的重复语句和空白语句或符号，请去除这些语句和符号。\
+    #         对于一些无法理解的句子，首先根据日语中具有相似发音的词进行猜测，同时注意上下文曾经提到的事物和逻辑关系，并尝试得出可能的原句。\
+    #         请注意这些转录后的结果是日语，你需要结合日语汉字的读音和相关知识进行修正。\
+    #         在这里提供参考的专有名词，はやしここ/林ココ/ハヤシココ对应的汉字是林鼓子。ココ在具有人名的含义的上下文环境里请修改为鼓子。\n\n\
+    #         【输出格式要求】\n\
+    #         输入数据包含完整文本(full_text)和带时间戳的片段列表(segments)。请结合 full_text 的全局上下文，对各个 segments 中的文字进行校对。\n\
+    #         你必须返回一个严格的JSON数组，数组元素包含 start, end, 和 text（校对后的文本）。请不要输出任何 Markdown 标记（例如 ```json），只输出合法的 JSON 纯文本！\n\
+    #         示例格式：\n\
+    #         [\n  {{\"start\": 0.0, \"end\": 5.5, \"text\": \"校对后的句子1\"}},\n  {{\"start\": 5.5, \"end\": 12.0, \"text\": \"校对后的句子2\"}}\n]"),
+    #     ("human", "请校对下面的转录文本：\n{text}")
+    # ])
+
+    cal = load_prompt("calibration")
     calibration_prompt = ChatPromptTemplate.from_messages([
-        ("system", "你是一个专业的音频转录文本校对助手。你的任务是修正文本中的同音字错误、专有名词错误，并使语句通顺。\
-            请保持原意，不要进行扩写。由于转录模型的能力有限，转录结果可能会出现无意义的重复语句和空白语句或符号，请去除这些语句和符号。\
-            对于一些无法理解的句子，首先根据日语中具有相似发音的词进行猜测，同时注意上下文曾经提到的事物和逻辑关系，并尝试得出可能的原句。\
-            请注意这些转录后的结果是日语，你需要结合日语汉字的读音和相关知识进行修正。\
-            在这里提供参考的专有名词，はやしここ/林ココ/ハヤシココ对应的汉字是林鼓子。ココ在具有人名的含义的上下文环境里请修改为鼓子。\n\n\
-            【输出格式要求】\n\
-            输入数据包含完整文本(full_text)和带时间戳的片段列表(segments)。请结合 full_text 的全局上下文，对各个 segments 中的文字进行校对。\n\
-            你必须返回一个严格的JSON数组，数组元素包含 start, end, 和 text（校对后的文本）。请不要输出任何 Markdown 标记（例如 ```json），只输出合法的 JSON 纯文本！\n\
-            示例格式：\n\
-            [\n  {{\"start\": 0.0, \"end\": 5.5, \"text\": \"校对后的句子1\"}},\n  {{\"start\": 5.5, \"end\": 12.0, \"text\": \"校对后的句子2\"}}\n]"),
-        ("human", "请校对下面的转录文本：\n{text}")
+        ("system", cal["system"]),
+        ("human", cal["human"]),
     ])
     
     calibration_chain = calibration_prompt | llm | StrOutputParser()
@@ -96,12 +114,18 @@ def generate_summary(calibrated_data):
     # 我们直接提取校对后的 full_text 即可，无需再手动遍历 segments
     full_text = calibrated_data.get("full_text", "")
     
-    summary_prompt = ChatPromptTemplate.from_messages([
-        ("system", "你是一个善于归纳核心要点的助手。请将用户提供的长文本总结为结构清晰的要点。\
-            请输出提供给你的文档中所有涉及到的内容，不要有任何遗漏。如果有相同内容出现过多次，可以并成一条。\
-            请注意：提供给你的原文是日语，但请你统一整理为中文并输出。\
-            但是对于一些词源是英语或者别的语言的日语，可以在输出结果中保留日语。"),
-        ("human", "文本内容：\n{text}")
+    # summary_prompt = ChatPromptTemplate.from_messages([
+    #     ("system", "你是一个善于归纳核心要点的助手。请将用户提供的长文本总结为结构清晰的要点。\
+    #         请输出提供给你的文档中所有涉及到的内容，不要有任何遗漏。如果有相同内容出现过多次，可以并成一条。\
+    #         请注意：提供给你的原文是日语，但请你统一整理为中文并输出。\
+    #         但是对于一些词源是英语或者别的语言的日语，可以在输出结果中保留日语。"),
+    #     ("human", "文本内容：\n{text}")
+    # ])
+
+    cal = load_prompt("summarization")
+    calibration_prompt = ChatPromptTemplate.from_messages([
+        ("system", cal["system"]),
+        ("human", cal["human"]),
     ])
     
     summary_chain = summary_prompt | llm | StrOutputParser()
@@ -138,15 +162,18 @@ def build_qa_engine(calibrated_data):
     vectorstore = FAISS.from_documents(docs, embeddings)
     retriever = vectorstore.as_retriever(search_kwargs={"k": 2}) 
     
-    qa_prompt = ChatPromptTemplate.from_template("""
-    你是一个radio内容问答助手。请使用以下提供的参考片段来回答用户的问题。
-    每一个参考片段都包含相关的起始时间戳。在你的回答中，必须明确告诉用户该去听哪个时间段的音频。
-    用户提问的语言是中文，但是广播稿是日文，请注意语言的转换和对应关系，并统一用中文来回答用户的问题。
-    参考片段：
-    {context}
+    # qa_prompt = ChatPromptTemplate.from_template("""
+    # 你是一个radio内容问答助手。请使用以下提供的参考片段来回答用户的问题。
+    # 每一个参考片段都包含相关的起始时间戳。在你的回答中，必须明确告诉用户该去听哪个时间段的音频。
+    # 用户提问的语言是中文，但是广播稿是日文，请注意语言的转换和对应关系，并统一用中文来回答用户的问题。
+    # 参考片段：
+    # {context}
     
-    用户问题：{question}
-    """)
+    # 用户问题：{question}
+    # """)
+
+    qa = load_prompt("qa")
+    qa_prompt = ChatPromptTemplate.from_template(qa["template"])
     
     def format_docs(retrieved_docs):
         return "\n\n".join(

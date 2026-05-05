@@ -26,6 +26,7 @@ Pipeline flow:
 - **Japanese audio focus**: `initial_prompt` in mlx-whisper calls includes name mappings (e.g., はやしここ → 林鼓子). Transcription JSON format: `{"full_text": str, "segments": [{"start": float, "end": float, "text": str}]}`.
 - Default LLM is `ChatDeepSeek(model="deepseek-v4-flash")`. Alternative `ChatOllama` with `gemma4:26b` is commented out in `agent_core.py`.
 - Embeddings use **`mxbai-embed-large`** via Ollama (not the LLM model).
+- **Prompts are external YAML files** in `prompts/` (one per pipeline step). Select variant via `PROMPT_SELECT` env var (default: `prompt_1`).
 - No tests, no formatter, no linter, no CI configured. `pyproject.toml` has no `[tool.ruff]`, `[tool.pytest]`, etc.
 - `audio_transcribe.py` and `test_demucs.py` are personal utility scripts, gitignored — not part of the agent.
 - Input JSON is expected from an external transcription step (e.g., `mlx_whisper`); the agent does not call the transcriber itself.

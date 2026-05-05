@@ -48,12 +48,19 @@ uv run python agent_core.py
 
 This executes the full pipeline: calibrate → summarize → QA with a sample query.
 
+To switch prompt profiles (e.g., for different radio formats), set `PROMPT_SELECT`:
+
+```bash
+PROMPT_SELECT=prompt_1 uv run python agent_core.py
+```
+
 ## Project Structure
 
-| File | Purpose |
-|------|---------|
+| File / Dir | Purpose |
+|------------|---------|
 | `agent_core.py` | Main pipeline (calibrate, summarize, Q&A) |
 | `audio_tools.py` | LangChain tool for mlx-whisper transcription |
+| `prompts/` | YAML files for LLM prompts (one per pipeline step) |
 
 
 ## Tech Stack
@@ -62,3 +69,4 @@ This executes the full pipeline: calibrate → summarize → QA with a sample qu
 - **Embeddings**: `mxbai-embed-large` via Ollama
 - **Speech-to-text**: `mlx-whisper` (Apple Silicon)
 - **Vector store**: FAISS (in-memory)
+- **Prompt management**: YAML files in `prompts/`, selectable via `PROMPT_SELECT` env var
