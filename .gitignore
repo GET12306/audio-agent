@@ -6,11 +6,13 @@ dist/
 wheels/
 *.egg-info
 .env
-.mypy_cache
 .DS_Store
-transcribe_result/
 audio_transcribe.py
 test_demucs.py
 
 # Virtual environments
 .venv
+
+# Generated data (knowledge base, calibrated files)
+transcribe_result/
+data/

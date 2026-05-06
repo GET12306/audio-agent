@@ -122,15 +122,15 @@ def generate_summary(calibrated_data):
     #     ("human", "文本内容：\n{text}")
     # ])
 
-    cal = load_prompt("summarization")
-    calibration_prompt = ChatPromptTemplate.from_messages([
-        ("system", cal["system"]),
-        ("human", cal["human"]),
+    summary_data = load_prompt("summarization")
+    summary_prompt = ChatPromptTemplate.from_messages([
+        ("system", summary_data["system"]),
+        ("human", summary_data["human"]),
     ])
     
     summary_chain = summary_prompt | llm | StrOutputParser()
     
-    print("\nGenerating summary...")
+    print("Generating summary...")
 
     summary = summary_chain.invoke({"text": full_text})
     return summary
@@ -138,57 +138,60 @@ def generate_summary(calibrated_data):
 # ==========================================
 # 3. Timestamp-Aware RAG
 # ==========================================
+def _create_qa_chain(retriever):
+    qa = load_prompt("qa")
+    qa_prompt = ChatPromptTemplate.from_template(qa["template"])
+
+    def format_docs(retrieved_docs):
+        return "\n\n".join(
+            f"[{doc.metadata.get('episode', '?')} | {doc.metadata['start_time']}s - {doc.metadata['end_time']}s] Content: {doc.page_content}"
+            for doc in retrieved_docs
+        )
+
+    return (
+        {"context": retriever | format_docs, "question": RunnablePassthrough()}
+        | qa_prompt
+        | llm
+        | StrOutputParser()
+    )
+
+
 def build_qa_engine(calibrated_data):
     segments = calibrated_data["segments"]
     docs = []
     chunk_size = 5
     overlap = 2
     step = chunk_size - overlap
-    
+
     for i in range(0, len(segments), step):
-        chunk = segments[i:i+chunk_size]
+        chunk = segments[i : i + chunk_size]
         combined_text = " ".join([seg["text"] for seg in chunk])
         docs.append(
             Document(
-                page_content=combined_text, 
+                page_content=combined_text,
                 metadata={
-                    "start_time": chunk[0]["start"], 
-                    "end_time": chunk[-1]["end"]
+                    "start_time": chunk[0]["start"],
+                    "end_time": chunk[-1]["end"],
                 }
             )
         )
-    
+
     print("\nBuilding in-memory vector store for QA...")
     vectorstore = FAISS.from_documents(docs, embeddings)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 2}) 
-    
-    # qa_prompt = ChatPromptTemplate.from_template("""
-    # 你是一个radio内容问答助手。请使用以下提供的参考片段来回答用户的问题。
-    # 每一个参考片段都包含相关的起始时间戳。在你的回答中，必须明确告诉用户该去听哪个时间段的音频。
-    # 用户提问的语言是中文，但是广播稿是日文，请注意语言的转换和对应关系，并统一用中文来回答用户的问题。
-    # 参考片段：
-    # {context}
-    
-    # 用户问题：{question}
-    # """)
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
+    return _create_qa_chain(retriever)
 
-    qa = load_prompt("qa")
-    qa_prompt = ChatPromptTemplate.from_template(qa["template"])
-    
-    def format_docs(retrieved_docs):
-        return "\n\n".join(
-            f"[Time: {doc.metadata['start_time']}s - {doc.metadata['end_time']}s] Content: {doc.page_content}"
-            for doc in retrieved_docs
-        )
-    
-    qa_chain = (
-        {"context": retriever | format_docs, "question": RunnablePassthrough()}
-        | qa_prompt
-        | llm
-        | StrOutputParser()
-    )
-    
-    return qa_chain
+
+def load_qa_engine_from_kb(kb_path="data/kb"):
+    if not Path(kb_path).exists():
+        print(f"Knowledge base not found at {kb_path}/")
+        print("Run `uv run build_kb.py` to create one.")
+        return None
+
+    print(f"\nLoading knowledge base from {kb_path}/...")
+    vectorstore = FAISS.load_local(kb_path, embeddings, allow_dangerous_deserialization=True)
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+    return _create_qa_chain(retriever)
 
 if __name__ == "__main__":
     text_file_path = os.getenv('TRANSCRIPTION_JSON_PATH')
@@ -197,28 +200,41 @@ if __name__ == "__main__":
         print(f"Error: TRANSCRIPTION_JSON_PATH is not set or file does not exist: {text_file_path}")
         print("Please set TRANSCRIPTION_JSON_PATH in your .env file.")
         exit(1)
-
-    corrected_transcription_path = text_file_path.replace('.json', '_calibrated.json')
+    
     # 1. calibrate the transcription
+    corrected_transcription_path = text_file_path.replace('.json', '_calibrated.json')
     with open(text_file_path, "r", encoding="utf-8") as f:
-        mock_whisper_output = json.load(f)
-    corrected_transcription = calibrate_text(mock_whisper_output)
+        whisper_output = json.load(f)
+    corrected_transcription = calibrate_text(whisper_output)
 
     with open(corrected_transcription_path, "w", encoding="utf-8") as f:
         json.dump(corrected_transcription, f, ensure_ascii=False, indent=2)
-    
+
+    # also save a copy to data/episodes/ for the knowledge base
+    episodes_dir = Path("data/episodes")
+    episodes_dir.mkdir(parents=True, exist_ok=True)
+    episode_copy = episodes_dir / Path(corrected_transcription_path).name
+    with open(episode_copy, "w", encoding="utf-8") as f:
+        json.dump(corrected_transcription, f, ensure_ascii=False, indent=2)
+    print(f"Copied to {episode_copy}")
+
     # 2. generate summary
+    # with open(corrected_transcription_path, "r", encoding="utf-8") as f:
+    #     corrected_transcription = json.load(f)
     final_summary = generate_summary(corrected_transcription)
     # write summary to md file
     summary_path = text_file_path.replace('.json', '_summary.md')
     with open(summary_path, "w", encoding="utf-8") as f:
         f.write(final_summary)
     
-    # 3. build and test qa engine
-    qa_engine = build_qa_engine(corrected_transcription)
-    
-    query = "Where should I start if I want to learn about the Coco's family cat?"
-    print(f"User Query: {query}")
-    answer = qa_engine.invoke(query)
-    print("--- Agent Response: ---")
-    print(answer)
+    # 3. load qa engine from knowledge base
+    kb_path = os.getenv("KB_PATH", "data/kb")
+    qa_engine = load_qa_engine_from_kb(kb_path)
+    if qa_engine:
+        query = "我想了解鼓子家的宠物应该从哪开始听?"
+        print(f"User Query: {query}")
+        answer = qa_engine.invoke(query)
+        print("--- Agent Response: ---")
+        print(answer)
+    else:
+        print("Skipping QA step.")

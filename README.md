@@ -40,27 +40,46 @@ cp .env.example .env
 
 ## Usage
 
+### Step 1: Process a radio episode
+
 Provide a transcription JSON (format: `{"full_text": str, "segments": [{"start": float, "end": float, "text": str}]}`) and run:
 
 ```bash
-uv run python agent_core.py
+uv run agent_core.py
 ```
 
-This executes the full pipeline: calibrate → summarize → QA with a sample query.
+This calibrates the transcription, generates a summary, and saves a copy to `data/episodes/` for the knowledge base.
 
 To switch prompt profiles (e.g., for different radio formats), set `PROMPT_SELECT`:
 
 ```bash
-PROMPT_SELECT=prompt_1 uv run python agent_core.py
+PROMPT_SELECT=prompt_2 uv run agent_core.py
 ```
+
+### Step 2: Build the knowledge base
+
+After processing one or more episodes, build the persistent FAISS index:
+
+```bash
+uv run build_kb.py
+```
+
+This creates `data/kb/` with a searchable index of all episodes.
+
+### Step 3: Ask questions
+
+The QA step in `agent_core.py` loads from the persistent knowledge base, so you can ask about any processed episode without rebuilding the index every time.
 
 ## Project Structure
 
 | File / Dir | Purpose |
 |------------|---------|
 | `agent_core.py` | Main pipeline (calibrate, summarize, Q&A) |
+| `build_kb.py` | Build persistent FAISS knowledge base from `data/episodes/` |
 | `audio_tools.py` | LangChain tool for mlx-whisper transcription |
 | `prompts/` | YAML files for LLM prompts (one per pipeline step) |
+| `data/episodes/` | Calibrated JSON files (input for knowledge base) |
+| `data/kb/` | Persisted FAISS index (loaded for QA) |
 
 
 ## Tech Stack
@@ -68,5 +87,5 @@ PROMPT_SELECT=prompt_1 uv run python agent_core.py
 - **LLM**: DeepSeek v4 Flash via `langchain-deepseek` (or swap to Ollama locally)
 - **Embeddings**: `mxbai-embed-large` via Ollama
 - **Speech-to-text**: `mlx-whisper` (Apple Silicon)
-- **Vector store**: FAISS (in-memory)
+- **Vector store**: FAISS (persisted to disk via `build_kb.py`)
 - **Prompt management**: YAML files in `prompts/`, selectable via `PROMPT_SELECT` env var

@@ -27,6 +27,7 @@ Pipeline flow:
 - Default LLM is `ChatDeepSeek(model="deepseek-v4-flash")`. Alternative `ChatOllama` with `gemma4:26b` is commented out in `agent_core.py`.
 - Embeddings use **`mxbai-embed-large`** via Ollama (not the LLM model).
 - **Prompts are external YAML files** in `prompts/` (one per pipeline step). Select variant via `PROMPT_SELECT` env var (default: `prompt_1`).
+- **FAISS knowledge base is persisted to disk** via `build_kb.py`. Scans `data/episodes/` for `*_calibrated.json`, chunks with episode metadata, saves index to `data/kb/`. `agent_core.py` loads from this KB for QA instead of building in-memory from a single file.
 - No tests, no formatter, no linter, no CI configured. `pyproject.toml` has no `[tool.ruff]`, `[tool.pytest]`, etc.
 - `audio_transcribe.py` and `test_demucs.py` are personal utility scripts, gitignored — not part of the agent.
 - Input JSON is expected from an external transcription step (e.g., `mlx_whisper`); the agent does not call the transcriber itself.
