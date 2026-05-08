@@ -35,48 +35,57 @@ uv sync
 cp .env.example .env
 # Edit .env:
 #   DEEPSEEK_API_KEY — your DeepSeek API key
-#   TRANSCRIPTION_JSON_PATH — path to a Whisper-transcribed JSON file
 ```
 
 ## Usage
 
-### Step 1: Process a radio episode
+### Interactive agent (recommended)
 
-Provide a transcription JSON (format: `{"full_text": str, "segments": [{"start": float, "end": float, "text": str}]}`) and run:
+Start the interactive ReAct agent:
 
 ```bash
-uv run agent_core.py
+uv run tools.py
 ```
 
-This calibrates the transcription, generates a summary, and saves a copy to `data/episodes/` for the knowledge base.
+The agent decides which tool to use based on your request. Example flow:
 
-To switch prompt profiles (e.g., for different radio formats), set `PROMPT_SELECT`:
+```
+> Transcribe episode 17 and add it to the knowledge base
+→ Agent calls transcribe_audio → calibrate_transcription → rebuild_knowledge_base
 
-```bash
-PROMPT_SELECT=prompt_2 uv run agent_core.py
+> What did the host say about cats?
+→ Agent calls search_knowledge_base(query="cat")
+→ Returns answer with episode and timestamp references
+
+> Summarize episode 17
+→ Agent calls summarize_episode
 ```
 
-### Step 2: Build the knowledge base
+### Individual tools (for scripting)
 
-After processing one or more episodes, build the persistent FAISS index:
+You can also run each tool directly:
 
 ```bash
+# Transcribe an audio file
+uv run python -c "from tools import transcribe_audio; print(transcribe_audio.invoke({'audio_path': '/path/to/audio.mp4'}))"
+
+# Build knowledge base from data/episodes/
 uv run build_kb.py
+
+# Calibrate a raw transcription
+uv run python -c "from tools import calibrate_transcription; print(calibrate_transcription.invoke({'raw_json_path': '/path/to/file.json'}))"
 ```
 
-This creates `data/kb/` with a searchable index of all episodes.
-
-### Step 3: Ask questions
-
-The QA step in `agent_core.py` loads from the persistent knowledge base, so you can ask about any processed episode without rebuilding the index every time.
+Prompt profiles are selectable via `PROMPT_SELECT` env var (default: `prompt_1`).
 
 ## Project Structure
 
 | File / Dir | Purpose |
 |------------|---------|
-| `agent_core.py` | Main pipeline (calibrate, summarize, Q&A) |
-| `build_kb.py` | Build persistent FAISS knowledge base from `data/episodes/` |
+| `tools.py` | **Entry point.** ReAct agent with all tools + interactive loop |
+| `agent_core.py` | Core logic (calibrate, summarize, QA chain) — pure functions |
 | `audio_tools.py` | LangChain tool for mlx-whisper transcription |
+| `build_kb.py` | Build persistent FAISS knowledge base from `data/episodes/` |
 | `prompts/` | YAML files for LLM prompts (one per pipeline step) |
 | `data/episodes/` | Calibrated JSON files (input for knowledge base) |
 | `data/kb/` | Persisted FAISS index (loaded for QA) |
@@ -84,8 +93,9 @@ The QA step in `agent_core.py` loads from the persistent knowledge base, so you 
 
 ## Tech Stack
 
-- **LLM**: DeepSeek v4 Flash via `langchain-deepseek` (or swap to Ollama locally)
+- **LLM**: DeepSeek v4 Flash via `langchain-deepseek` (thinking disabled via `extra_body`; swap to `ChatOllama` for local inference)
 - **Embeddings**: `mxbai-embed-large` via Ollama
 - **Speech-to-text**: `mlx-whisper` (Apple Silicon)
 - **Vector store**: FAISS (persisted to disk via `build_kb.py`)
+- **Orchestration**: LangGraph ReAct agent (`create_react_agent`)
 - **Prompt management**: YAML files in `prompts/`, selectable via `PROMPT_SELECT` env var

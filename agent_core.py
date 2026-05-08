@@ -21,6 +21,9 @@ llm = ChatDeepSeek(
     max_tokens=None,
     timeout=None,
     max_retries=2,
+    extra_body={
+        "thinking": {"type": "disabled"},
+    }
 )
 
 # or local model
@@ -43,20 +46,6 @@ def load_prompt(name: str) -> dict:
 # 1. Calibration
 # ==========================================
 def calibrate_text(raw_data):
-    # calibration_prompt = ChatPromptTemplate.from_messages([
-    #     ("system", "你是一个专业的音频转录文本校对助手。你的任务是修正文本中的同音字错误、专有名词错误，并使语句通顺。\
-    #         请保持原意，不要进行扩写。由于转录模型的能力有限，转录结果可能会出现无意义的重复语句和空白语句或符号，请去除这些语句和符号。\
-    #         对于一些无法理解的句子，首先根据日语中具有相似发音的词进行猜测，同时注意上下文曾经提到的事物和逻辑关系，并尝试得出可能的原句。\
-    #         请注意这些转录后的结果是日语，你需要结合日语汉字的读音和相关知识进行修正。\
-    #         在这里提供参考的专有名词，はやしここ/林ココ/ハヤシココ对应的汉字是林鼓子。ココ在具有人名的含义的上下文环境里请修改为鼓子。\n\n\
-    #         【输出格式要求】\n\
-    #         输入数据包含完整文本(full_text)和带时间戳的片段列表(segments)。请结合 full_text 的全局上下文，对各个 segments 中的文字进行校对。\n\
-    #         你必须返回一个严格的JSON数组，数组元素包含 start, end, 和 text（校对后的文本）。请不要输出任何 Markdown 标记（例如 ```json），只输出合法的 JSON 纯文本！\n\
-    #         示例格式：\n\
-    #         [\n  {{\"start\": 0.0, \"end\": 5.5, \"text\": \"校对后的句子1\"}},\n  {{\"start\": 5.5, \"end\": 12.0, \"text\": \"校对后的句子2\"}}\n]"),
-    #     ("human", "请校对下面的转录文本：\n{text}")
-    # ])
-
     cal = load_prompt("calibration")
     calibration_prompt = ChatPromptTemplate.from_messages([
         ("system", cal["system"]),
@@ -113,14 +102,6 @@ def generate_summary(calibrated_data):
     # 由于 calibrated_data 现在是一个包含 full_text 和 segments 的字典
     # 我们直接提取校对后的 full_text 即可，无需再手动遍历 segments
     full_text = calibrated_data.get("full_text", "")
-    
-    # summary_prompt = ChatPromptTemplate.from_messages([
-    #     ("system", "你是一个善于归纳核心要点的助手。请将用户提供的长文本总结为结构清晰的要点。\
-    #         请输出提供给你的文档中所有涉及到的内容，不要有任何遗漏。如果有相同内容出现过多次，可以并成一条。\
-    #         请注意：提供给你的原文是日语，但请你统一整理为中文并输出。\
-    #         但是对于一些词源是英语或者别的语言的日语，可以在输出结果中保留日语。"),
-    #     ("human", "文本内容：\n{text}")
-    # ])
 
     summary_data = load_prompt("summarization")
     summary_prompt = ChatPromptTemplate.from_messages([
@@ -193,48 +174,4 @@ def load_qa_engine_from_kb(kb_path="data/kb"):
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
     return _create_qa_chain(retriever)
 
-if __name__ == "__main__":
-    text_file_path = os.getenv('TRANSCRIPTION_JSON_PATH')
-    
-    if not text_file_path or not os.path.exists(text_file_path):
-        print(f"Error: TRANSCRIPTION_JSON_PATH is not set or file does not exist: {text_file_path}")
-        print("Please set TRANSCRIPTION_JSON_PATH in your .env file.")
-        exit(1)
-    
-    # 1. calibrate the transcription
-    corrected_transcription_path = text_file_path.replace('.json', '_calibrated.json')
-    with open(text_file_path, "r", encoding="utf-8") as f:
-        whisper_output = json.load(f)
-    corrected_transcription = calibrate_text(whisper_output)
 
-    with open(corrected_transcription_path, "w", encoding="utf-8") as f:
-        json.dump(corrected_transcription, f, ensure_ascii=False, indent=2)
-
-    # also save a copy to data/episodes/ for the knowledge base
-    episodes_dir = Path("data/episodes")
-    episodes_dir.mkdir(parents=True, exist_ok=True)
-    episode_copy = episodes_dir / Path(corrected_transcription_path).name
-    with open(episode_copy, "w", encoding="utf-8") as f:
-        json.dump(corrected_transcription, f, ensure_ascii=False, indent=2)
-    print(f"Copied to {episode_copy}")
-
-    # 2. generate summary
-    # with open(corrected_transcription_path, "r", encoding="utf-8") as f:
-    #     corrected_transcription = json.load(f)
-    final_summary = generate_summary(corrected_transcription)
-    # write summary to md file
-    summary_path = text_file_path.replace('.json', '_summary.md')
-    with open(summary_path, "w", encoding="utf-8") as f:
-        f.write(final_summary)
-    
-    # 3. load qa engine from knowledge base
-    kb_path = os.getenv("KB_PATH", "data/kb")
-    qa_engine = load_qa_engine_from_kb(kb_path)
-    if qa_engine:
-        query = "我想了解鼓子家的宠物应该从哪开始听?"
-        print(f"User Query: {query}")
-        answer = qa_engine.invoke(query)
-        print("--- Agent Response: ---")
-        print(answer)
-    else:
-        print("Skipping QA step.")

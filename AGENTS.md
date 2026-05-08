@@ -6,20 +6,18 @@
 - **Python 3.12** (`.python-version`). Package manager is **`uv`** (not pip/poetry).
   - `uv sync` to install, `uv run python <script.py>` to execute.
 - **Ollama must be running locally** (`ollama serve`) with `mxbai-embed-large` (used by `OllamaEmbeddings`). No Ollama model needed for the LLM — default is `ChatDeepSeek` (`deepseek-v4-flash`).
-- `.env` loaded via `python-dotenv` at module import time. Requires `DEEPSEEK_API_KEY` and `TRANSCRIPTION_JSON_PATH`. See `.env.example`.
+- `.env` loaded via `python-dotenv` at module import time. Requires `DEEPSEEK_API_KEY`. See `.env.example`.
 
 ## Entrypoints & architecture
 
 | File | Role |
 |---|---|
-| `agent_core.py` | Main pipeline: calibrate → summarize → QA. Runs via `uv run python agent_core.py` |
+| `tools.py` | **Interactive ReAct agent.** Entry point for the system. Runs via `uv run python tools.py` |
+| `agent_core.py` | Core logic (calibrate, summarize, QA chain) — pure functions, no agent coupling |
 | `audio_tools.py` | LangChain `@tool` wrapping `mlx-whisper` transcription |
+| `build_kb.py` | Standalone script to build FAISS KB from `data/episodes/` |
 
-Pipeline flow:
-1. Read transcription JSON (path from `TRANSCRIPTION_JSON_PATH` env var)
-2. LLM calibrates (fixes Japanese homophone errors, deduplicates, timestamps preserved)
-3. LLM summarizes (outputs Chinese)
-4. FAISS vector store + LLM for timestamp-aware QA
+All pipeline steps are exposed as `@tool` functions in `tools.py`. The agent decides which to call based on user input.
 
 ## Key conventions & quirks
 
