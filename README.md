@@ -44,7 +44,7 @@ cp .env.example .env
 Start the interactive ReAct agent:
 
 ```bash
-uv run tools.py
+uv run agent.py
 ```
 
 The agent decides which tool to use based on your request. Example flow:
@@ -67,13 +67,13 @@ You can also run each tool directly:
 
 ```bash
 # Transcribe an audio file
-uv run python -c "from tools import transcribe_audio; print(transcribe_audio.invoke({'audio_path': '/path/to/audio.mp4'}))"
+uv run python -c "from agent import transcribe_audio; print(transcribe_audio.invoke({'audio_path': '/path/to/audio.mp4'}))"
 
 # Build knowledge base from data/episodes/
 uv run build_kb.py
 
 # Calibrate a raw transcription
-uv run python -c "from tools import calibrate_transcription; print(calibrate_transcription.invoke({'raw_json_path': '/path/to/file.json'}))"
+uv run python -c "from agent import calibrate_transcription; print(calibrate_transcription.invoke({'raw_json_path': '/path/to/file.json'}))"
 ```
 
 Prompt profiles are selectable via `PROMPT_SELECT` env var (default: `prompt_1`).
@@ -82,9 +82,8 @@ Prompt profiles are selectable via `PROMPT_SELECT` env var (default: `prompt_1`)
 
 | File / Dir | Purpose |
 |------------|---------|
-| `tools.py` | **Entry point.** ReAct agent with all tools + interactive loop |
-| `agent_core.py` | Core logic (calibrate, summarize, QA chain) — pure functions |
-| `audio_tools.py` | LangChain tool for mlx-whisper transcription |
+| `agent.py` | **Entry point.** ReAct agent with all tools + interactive loop |
+| `engine.py` | Core logic (transcribe, calibrate, summarize, QA chain) — pure functions |
 | `build_kb.py` | Build persistent FAISS knowledge base from `data/episodes/` |
 | `prompts/` | YAML files for LLM prompts (one per pipeline step) |
 | `data/episodes/` | Calibrated JSON files (input for knowledge base) |

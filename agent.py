@@ -3,20 +3,18 @@ import json
 from pathlib import Path
 from langchain.tools import tool
 from langchain_community.vectorstores import FAISS
-# from langgraph.prebuilt import create_react_agent
 from langchain.agents import create_agent
-from langchain_core.messages import AIMessage
 
-from agent_core import (
+from engine import (
     llm,
     embeddings,
+    transcribe_audio as _transcribe_audio,
     calibrate_text,
     generate_summary,
     _create_qa_chain,
     load_prompt,
 )
-from audio_tools import transcribe_audio_tool as _transcribe_tool
-from build_kb import main as _rebuild_kb, KB_PATH, EPISODES_DIR
+from build_kb import main as _rebuild_kb, EPISODES_DIR
 
 
 # ---- Tool: Transcribe ----
@@ -24,7 +22,7 @@ from build_kb import main as _rebuild_kb, KB_PATH, EPISODES_DIR
 @tool
 def transcribe_audio(audio_path: str, model_path: str = "mlx-community/whisper-large-v3-turbo") -> str:
     """Transcribe an audio file into timestamped text. Saves result as JSON alongside the audio file. Returns the path to the saved JSON."""
-    result = _transcribe_tool.invoke({"audio_path": audio_path, "model_path": model_path})
+    result = _transcribe_audio(audio_path, model_path)
     out_path = Path(audio_path).with_suffix(".json")
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
@@ -35,16 +33,12 @@ def transcribe_audio(audio_path: str, model_path: str = "mlx-community/whisper-l
 
 @tool
 def calibrate_transcription(raw_json_path: str) -> str:
-    """Calibrate a raw transcription JSON: fix homophone errors, remove duplicates, preserve timestamps. Saves the calibrated JSON alongside the original and copies it to data/episodes/. Returns the path to the calibrated JSON."""
+    """Calibrate a raw transcription JSON: fix homophone errors, remove duplicates, preserve timestamps. Saves the calibrated JSON to data/episodes/. Returns the path to the calibrated JSON."""
     with open(raw_json_path, encoding="utf-8") as f:
         raw_data = json.load(f)
     corrected = calibrate_text(raw_data)
 
     out_path = raw_json_path.replace(".json", "_calibrated.json")
-    # with open(out_path, "w", encoding="utf-8") as f:
-    #     json.dump(corrected, f, ensure_ascii=False, indent=2)
-
-    # save to data/episodes/ for the knowledge base
     ep_path = EPISODES_DIR / Path(out_path).name
     ep_path.parent.mkdir(parents=True, exist_ok=True)
     with open(ep_path, "w", encoding="utf-8") as f:
@@ -117,24 +111,10 @@ if __name__ == "__main__":
             break
 
         result = agent.invoke({"messages": [("human", user_input)]})
-        # for msg in result["messages"]:
-        #     if isinstance(msg, AIMessage) and msg.content and not msg.tool_calls:
-        #         print(msg.content)
-
         for msg in result["messages"]:
-            # message type: HumanMessage, AIMessage, ToolMessage
-            print(f"message type: [{msg.__class__.__name__}]")
-            
-            # if this message contains tool calls, print them
             if hasattr(msg, 'tool_calls') and msg.tool_calls:
-                for tool in msg.tool_calls:
-                    print(f"prepare to use tool: {tool['name']}")
-                    print(f"args: {tool['args']}")
-                    
-            # print message content
+                for tool_call in msg.tool_calls:
+                    print(f"[using tool: {tool_call['name']}]")
             if msg.content:
-                # to avoid  overflow
-                preview = msg.content
-                print(f"message content: {preview}")
-            
+                print(msg.content)
             print("-" * 40)
