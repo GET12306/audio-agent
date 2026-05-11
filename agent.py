@@ -51,15 +51,19 @@ def calibrate_transcription(raw_json_path: str) -> str:
 
 @tool
 def summarize_episode(calibrated_json_path: str) -> str:
-    """Generate a Chinese bullet-point summary from a calibrated transcription. Returns the path to the saved summary markdown."""
+    """Generate or retrieve a Chinese bullet-point summary from a calibrated transcription. Returns the summary content directly."""
+    out_path = calibrated_json_path.replace("_calibrated.json", "_summary.md")
+    if Path(out_path).exists():
+        with open(out_path, encoding="utf-8") as f:
+            return f.read()
+
     with open(calibrated_json_path, encoding="utf-8") as f:
         data = json.load(f)
     summary = generate_summary(data)
 
-    out_path = calibrated_json_path.replace("_calibrated.json", "_summary.md")
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(summary)
-    return out_path
+    return summary
 
 
 # ---- Tool: Search KB ----
@@ -112,9 +116,20 @@ if __name__ == "__main__":
 
         result = agent.invoke({"messages": [("human", user_input)]})
         for msg in result["messages"]:
+            # 1. 检查并打印深度思考过程 (Reasoning Content)
+            if hasattr(msg, 'additional_kwargs'):
+                reasoning = msg.additional_kwargs.get("reasoning_content")
+                if reasoning:
+                    print("\n💭 [Thinking...]")
+                    print(f"{reasoning}")
+                    print("-" * 20)
+            # 2. 检查并打印工具调用情况
             if hasattr(msg, 'tool_calls') and msg.tool_calls:
                 for tool_call in msg.tool_calls:
-                    print(f"[using tool: {tool_call['name']}]")
+                    print(f"\n🛠️ [using tool: {tool_call['name']}]")
+            # 3. 打印最终回复内容
             if msg.content:
-                print(msg.content)
-            print("-" * 40)
+                # 如果有内容，直接打印
+                print(f"\n{msg.content}")
+            
+            print("\n" + "=" * 40)

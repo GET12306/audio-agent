@@ -84,6 +84,7 @@ Prompt profiles are selectable via `PROMPT_SELECT` env var (default: `prompt_1`)
 |------------|---------|
 | `agent.py` | **Entry point.** ReAct agent with all tools + interactive loop |
 | `engine.py` | Core logic (transcribe, calibrate, summarize, QA chain) — pure functions |
+| `deepseek_model.py` | Custom `BaseChatModel` subclass with DeepSeek reasoning support |
 | `build_kb.py` | Build persistent FAISS knowledge base from `data/episodes/` |
 | `prompts/` | YAML files for LLM prompts (one per pipeline step) |
 | `data/episodes/` | Calibrated JSON files (input for knowledge base) |
@@ -92,9 +93,9 @@ Prompt profiles are selectable via `PROMPT_SELECT` env var (default: `prompt_1`)
 
 ## Tech Stack
 
-- **LLM**: DeepSeek v4 Flash via `langchain-deepseek` (thinking disabled via `extra_body`; swap to `ChatOllama` for local inference)
+- **LLM**: DeepSeek v4 Flash via custom `DeepSeekReasoning(BaseChatModel)` with full reasoning support; swap to `ChatOllama` for local inference
 - **Embeddings**: `mxbai-embed-large` via Ollama
 - **Speech-to-text**: `mlx-whisper` (Apple Silicon)
 - **Vector store**: FAISS (persisted to disk via `build_kb.py`)
-- **Orchestration**: LangGraph ReAct agent (`create_react_agent`)
+- **Orchestration**: LangChain `create_agent` (ReAct loop)
 - **Prompt management**: YAML files in `prompts/`, selectable via `PROMPT_SELECT` env var

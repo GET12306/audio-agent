@@ -2,8 +2,8 @@ import os
 import json
 from pathlib import Path
 from dotenv import load_dotenv
-from langchain_deepseek import ChatDeepSeek
 from langchain_ollama import ChatOllama, OllamaEmbeddings
+from deepseek_model import DeepSeekReasoning
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.documents import Document
@@ -15,17 +15,8 @@ import mlx_whisper
 
 load_dotenv()
 
-# use deepseek-v4-flash, API key is in .env file
-llm = ChatDeepSeek(
-    model="deepseek-v4-flash",
-    temperature=0,
-    max_tokens=None,
-    timeout=None,
-    max_retries=2,
-    extra_body={
-        "thinking": {"type": "disabled"},
-    }
-)
+# use deepseek-v4-flash with reasoning (thinking) support
+llm = DeepSeekReasoning()
 
 # or local model
 # llm = ChatOllama(model="gemma4:26b",)

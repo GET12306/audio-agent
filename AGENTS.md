@@ -14,6 +14,7 @@
 |---|---|
 | `agent.py` | **Interactive ReAct agent.** Entry point for the system. Runs via `uv run python agent.py` |
 | `engine.py` | Core logic (transcribe, calibrate, summarize, QA chain) — pure functions, no agent coupling |
+| `deepseek_model.py` | Custom `BaseChatModel` subclass — preserves DeepSeek `reasoning_content` across agent turns |
 | `build_kb.py` | Standalone script to build FAISS KB from `data/episodes/` |
 
 All pipeline steps are exposed as `@tool` functions in `agent.py`. The agent decides which to call based on user input.
@@ -21,7 +22,7 @@ All pipeline steps are exposed as `@tool` functions in `agent.py`. The agent dec
 ## Key conventions & quirks
 
 - **Japanese audio focus**: `initial_prompt` in mlx-whisper calls includes name mappings (e.g., はやしここ → 林鼓子). Transcription JSON format: `{"full_text": str, "segments": [{"start": float, "end": float, "text": str}]}`.
-- Default LLM is `ChatDeepSeek(model="deepseek-v4-flash")`. Alternative `ChatOllama` with `gemma4:26b` is commented out in `engine.py`.
+- Default LLM is `DeepSeekReasoning` (custom `BaseChatModel` in `deepseek_model.py`). Alternative `ChatOllama` with `gemma4:26b` is commented out in `engine.py`.
 - Embeddings use **`mxbai-embed-large`** via Ollama (not the LLM model).
 - **Prompts are external YAML files** in `prompts/` (one per pipeline step). Select variant via `PROMPT_SELECT` env var (default: `prompt_1`).
 - **FAISS knowledge base is persisted to disk** via `build_kb.py`. Scans `data/episodes/` for `*_calibrated.json`, chunks with episode metadata, saves index to `data/kb/`. `engine.py` loads from this KB for QA instead of building in-memory from a single file.
