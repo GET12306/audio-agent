@@ -1,12 +1,10 @@
 [project]
 name = "audio-agent"
-version = "0.4.0"
+version = "0.5.0"
 description = "An AI assistant for processing and analyzing audio content. Answering questions according to knowledge base"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "deepagents>=0.5.3",
-    "demucs-mlx[convert]>=1.4.3",
     "faiss-cpu>=1.13.2",
     "langchain>=1.2.15",
     "langgraph>=0.2.30",
@@ -17,5 +15,4 @@ dependencies = [
     "mlx-whisper>=0.4.3",
     "python-dotenv>=1.2.2",
     "pyyaml>=6.0.3",
-    "tavily-python>=0.7.23",
 ]

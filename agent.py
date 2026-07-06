@@ -1,7 +1,7 @@
 import os
 import json
 from pathlib import Path
-from langchain.tools import tool
+from langchain_core.tools import tool
 from langchain_community.vectorstores import FAISS
 from langchain.agents import create_agent
 
@@ -38,13 +38,13 @@ def calibrate_transcription(raw_json_path: str) -> str:
         raw_data = json.load(f)
     corrected = calibrate_text(raw_data)
 
-    out_path = raw_json_path.replace(".json", "_calibrated.json")
-    ep_path = EPISODES_DIR / Path(out_path).name
+    calibrated_name = Path(raw_json_path).with_suffix("").name + "_calibrated.json"
+    ep_path = EPISODES_DIR / calibrated_name
     ep_path.parent.mkdir(parents=True, exist_ok=True)
     with open(ep_path, "w", encoding="utf-8") as f:
         json.dump(corrected, f, ensure_ascii=False, indent=2)
 
-    return out_path
+    return str(ep_path)
 
 
 # ---- Tool: Summarize ----

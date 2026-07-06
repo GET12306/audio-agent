@@ -49,7 +49,7 @@ def main():
     episode_files = sorted(EPISODES_DIR.glob("*_calibrated.json"))
     if not episode_files:
         print(f"No calibrated files found in {EPISODES_DIR}/")
-        print("Run agent_core.py first, then copy the _calibrated.json files here.")
+        print("Run calibrate_transcription first, then rebuild the knowledge base.")
         return
 
     all_docs = []

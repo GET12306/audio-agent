@@ -1,6 +1,6 @@
 # Audio Agent
 
-An AI-powered audio processing and Q&A system for Japanese radio content. Built on LangChain with Apple Silicon acceleration.
+An AI-powered transcription, calibration, summarization, and Q&A system for single-speaker Japanese radio content. Built on LangChain with Apple Silicon acceleration.
 
 ## Pipeline
 
@@ -14,6 +14,8 @@ Audio → Transcription → Calibration → Summarization → Timestamp-aware RA
 | **Calibration** | LLM fixes homophone errors, deduplicates, preserves timestamps |
 | **Summarization** | LLM produces structured bullet-point summary |
 | **RAG QA** | FAISS vector store + LLM answers questions with source timestamps |
+
+This version intentionally keeps the scope small: no speaker diarization, no Hugging Face token requirement, and no incremental indexing. The knowledge base is rebuilt from the calibrated episode files when requested.
 
 ## Prerequisites
 
@@ -78,13 +80,20 @@ uv run python -c "from agent import calibrate_transcription; print(calibrate_tra
 
 Prompt profiles are selectable via `PROMPT_SELECT` env var (default: `prompt_1`).
 
+Generated file conventions:
+
+- Raw transcriptions are saved next to the audio file as `.json`.
+- Calibrated transcripts are saved under `data/episodes/*_calibrated.json`.
+- Summaries are saved next to the calibrated JSON as `*_summary.md`.
+- The FAISS index is saved under `data/kb/`.
+
 ## Project Structure
 
 | File / Dir | Purpose |
 |------------|---------|
 | `agent.py` | **Entry point.** ReAct agent with all tools + interactive loop |
 | `engine.py` | Core logic (transcribe, calibrate, summarize, QA chain) — pure functions |
-| `deepseek_model.py` | Custom `BaseChatModel` subclass with DeepSeek reasoning support |
+| `deepseek_model.py` | Custom `BaseChatModel` subclass. Captures DeepSeek `reasoning_content` for display, but does not send it back in follow-up API requests |
 | `build_kb.py` | Build persistent FAISS knowledge base from `data/episodes/` |
 | `prompts/` | YAML files for LLM prompts (one per pipeline step) |
 | `data/episodes/` | Calibrated JSON files (input for knowledge base) |
@@ -93,7 +102,7 @@ Prompt profiles are selectable via `PROMPT_SELECT` env var (default: `prompt_1`)
 
 ## Tech Stack
 
-- **LLM**: DeepSeek v4 Flash via custom `DeepSeekReasoning(BaseChatModel)` with full reasoning support; swap to `ChatOllama` for local inference
+- **LLM**: DeepSeek v4 Flash via custom `DeepSeekReasoning(BaseChatModel)`; swap to `ChatOllama` for local inference in `engine.py` if desired
 - **Embeddings**: `mxbai-embed-large` via Ollama
 - **Speech-to-text**: `mlx-whisper` (Apple Silicon)
 - **Vector store**: FAISS (persisted to disk via `build_kb.py`)

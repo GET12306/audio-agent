@@ -1,5 +1,4 @@
-import os
-from langchain.tools import tool
+from langchain_core.tools import tool
 import mlx_whisper
 
 @tool
@@ -61,5 +60,5 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
     load_dotenv()
     
-    test_file = os.getenv('AUDIO_PATH', './test.mp4')
+    test_file = './test.mp4'
     print(transcribe_audio_tool.invoke({"audio_path": test_file, "model_path": 'mlx-community/whisper-large-v3-turbo'}))

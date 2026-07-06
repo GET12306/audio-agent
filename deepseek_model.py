@@ -4,7 +4,9 @@ from typing import Any, Dict, List, Optional, Sequence
 
 import openai
 from langchain_core.callbacks import CallbackManagerForLLMRun
-from langchain_core.language_models.chat_models import BaseChatModel, ChatGeneration, ChatResult
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.outputs.chat_generation import ChatGeneration
+from langchain_core.outputs.chat_result import ChatResult
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
@@ -70,9 +72,6 @@ class DeepSeekReasoning(BaseChatModel):
             return {"role": "tool", "content": msg.content, "tool_call_id": msg.tool_call_id}
         if isinstance(msg, AIMessage):
             d: Dict[str, Any] = {"role": "assistant", "content": msg.content}
-            rc = msg.additional_kwargs.get("reasoning_content")
-            if rc:
-                d["reasoning_content"] = rc
             if msg.tool_calls:
                 d["tool_calls"] = [
                     {
